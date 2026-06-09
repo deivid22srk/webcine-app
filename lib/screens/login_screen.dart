@@ -13,30 +13,29 @@ class LoginScreen extends StatefulWidget {
 
 class _LoginScreenState extends State<LoginScreen> {
   final _tokenController = TextEditingController(text: 'AMECL7FZ');
-  final _proxyController = TextEditingController();
-  bool _showProxySettings = false;
+  final _apiBaseController = TextEditingController();
+  bool _showApiSettings = false;
 
   @override
   void initState() {
     super.initState();
-    // Inicializa o controller do proxy com o valor atual do service
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final api = Provider.of<ApiService>(context, listen: false);
-      _proxyController.text = api.proxyUrl;
+      _apiBaseController.text = api.apiBaseUrl;
     });
   }
 
   @override
   void dispose() {
     _tokenController.dispose();
-    _proxyController.dispose();
+    _apiBaseController.dispose();
     super.dispose();
   }
 
   Future<void> _handleLogin() async {
     final api = Provider.of<ApiService>(context, listen: false);
     final token = _tokenController.text.trim();
-    final proxy = _proxyController.text.trim();
+    final apiBase = _apiBaseController.text.trim();
 
     if (token.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -46,9 +45,9 @@ class _LoginScreenState extends State<LoginScreen> {
     }
 
     try {
-      // Salva URL do proxy antes de autenticar
-      if (proxy.isNotEmpty) {
-        await api.setProxyUrl(proxy);
+      // Salva URL da API antes de autenticar
+      if (apiBase.isNotEmpty) {
+        await api.setApiBaseUrl(apiBase);
       }
 
       final profiles = await api.loginWithToken(token);
@@ -72,7 +71,7 @@ class _LoginScreenState extends State<LoginScreen> {
               ],
             ),
             content: Text(
-              'Não foi possível conectar ao Proxy em "$proxy".\n\nErro: ${api.errorMessage ?? e.toString()}',
+              'Não foi possível conectar à API em "$apiBase".\n\nErro: ${api.errorMessage ?? e.toString()}',
               style: const TextStyle(color: Colors.white70),
             ),
             actions: [
@@ -104,7 +103,6 @@ class _LoginScreenState extends State<LoginScreen> {
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 color: const Color(0xFF6366F1).withOpacity(0.15),
-                restoreSystemFullScreenMap: null,
                 boxShadow: [
                   BoxShadow(
                     color: const Color(0xFF6366F1).withOpacity(0.15),
@@ -146,12 +144,12 @@ class _LoginScreenState extends State<LoginScreen> {
                     alignment: Alignment.topRight,
                     child: IconButton(
                       icon: Icon(
-                        _showProxySettings ? LucideIcons.x : LucideIcons.settings,
+                        _showApiSettings ? LucideIcons.x : LucideIcons.settings,
                         color: Colors.white70,
                       ),
                       onPressed: () {
                         setState(() {
-                          _showProxySettings = !_showProxySettings;
+                          _showApiSettings = !_showApiSettings;
                         });
                       },
                     ),
@@ -177,7 +175,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                     ),
                                   ),
                                   TextSpan(
-                                    text: 'Proxy',
+                                    text: 'App',
                                     style: TextStyle(
                                       fontFamily: 'Outfit',
                                       fontSize: 36,
@@ -212,9 +210,9 @@ class _LoginScreenState extends State<LoginScreen> {
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.stretch,
                                 children: [
-                                  if (_showProxySettings) ...[
+                                  if (_showApiSettings) ...[
                                     const Text(
-                                      'CONFIGURAÇÃO DO PROXY',
+                                      'CONFIGURAÇÃO DA API',
                                       style: TextStyle(
                                         fontSize: 12,
                                         fontWeight: FontWeight.bold,
@@ -224,11 +222,11 @@ class _LoginScreenState extends State<LoginScreen> {
                                     ),
                                     const SizedBox(height: 12),
                                     TextField(
-                                      controller: _proxyController,
+                                      controller: _apiBaseController,
                                       decoration: InputDecoration(
                                         prefixIcon: const Icon(LucideIcons.globe, size: 18),
-                                        hintText: 'http://192.168.1.5:3000',
-                                        labelText: 'Endereço do Servidor Proxy',
+                                        hintText: 'https://webcinevs2.com/api',
+                                        labelText: 'Caminho Base da API',
                                         filled: true,
                                         fillColor: Colors.black26,
                                         border: OutlineInputBorder(

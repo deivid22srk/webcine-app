@@ -220,7 +220,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   CircleAvatar(radius: 3.5, backgroundColor: Color(0xFF10B981)),
                   SizedBox(width: 6),
                   Text(
-                    'Proxy OK',
+                    'CineVS OK',
                     style: TextStyle(color: Color(0xFF10B981), fontSize: 10, fontWeight: FontWeight.bold),
                   ),
                 ],

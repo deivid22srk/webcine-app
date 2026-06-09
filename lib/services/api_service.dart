@@ -5,7 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/media.dart';
 
 class ApiService extends ChangeNotifier {
-  String _proxyUrl = 'http://10.0.2.2:3000'; // Default para Emulador Android
+  String _apiBaseUrl = 'https://webcinevs2.com/api'; // Endpoint padrão do CineVS
   String? _sessionToken;
   String? _deviceId;
   Map<String, dynamic>? _user;
@@ -14,12 +14,15 @@ class ApiService extends ChangeNotifier {
   bool _isLoading = false;
   String? _errorMessage;
 
-  String get proxyUrl => _proxyUrl;
+  String get apiBaseUrl => _apiBaseUrl;
   String? get sessionToken => _sessionToken;
   Map<String, dynamic>? get user => _user;
   Map<String, dynamic>? get activeProfile => _activeProfile;
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
+
+  static const String _userAgent = 
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
 
   ApiService() {
     _loadSettings();
@@ -28,7 +31,7 @@ class ApiService extends ChangeNotifier {
   // Carrega configurações salvas no dispositivo
   Future<void> _loadSettings() async {
     final prefs = await SharedPreferences.getInstance();
-    _proxyUrl = prefs.getString('proxy_url') ?? 'http://10.0.2.2:3000';
+    _apiBaseUrl = prefs.getString('api_base_url') ?? 'https://webcinevs2.com/api';
     _sessionToken = prefs.getString('session_token');
     _deviceId = prefs.getString('device_id');
     
@@ -43,22 +46,21 @@ class ApiService extends ChangeNotifier {
     }
 
     if (_deviceId == null) {
-      _deviceId = 'flutter-device-${DateTime.now().millisecondsSinceEpoch}-${_proxyUrl.hashCode.toRadixString(16)}';
+      _deviceId = 'flutter-device-${DateTime.now().millisecondsSinceEpoch}-${_apiBaseUrl.hashCode.toRadixString(16)}';
       await prefs.setString('device_id', _deviceId!);
     }
 
     notifyListeners();
   }
 
-  // Atualiza e salva a URL do Proxy
-  Future<void> setProxyUrl(String url) async {
-    // Normaliza URL removendo barra no final
+  // Atualiza e salva a URL base da API
+  Future<void> setApiBaseUrl(String url) async {
     if (url.endsWith('/')) {
       url = url.substring(0, url.length - 1);
     }
-    _proxyUrl = url;
+    _apiBaseUrl = url;
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('proxy_url', url);
+    await prefs.setString('api_base_url', url);
     notifyListeners();
   }
 
@@ -84,12 +86,13 @@ class ApiService extends ChangeNotifier {
     notifyListeners();
   }
 
-  // Cabeçalhos HTTP padrão com autorização do token do proxy
+  // Cabeçalhos HTTP padrão com autorização e User-Agent para contornar bloqueios do CineVS
   Map<String, String> get _headers {
     final Map<String, String> headers = {
       'Content-Type': 'application/json',
       'Accept': 'application/json',
       'X-Device-Id': _deviceId ?? 'flutter-device-1234',
+      'User-Agent': _userAgent,
     };
     if (_sessionToken != null) {
       headers['Authorization'] = 'Bearer $_sessionToken';
@@ -100,7 +103,7 @@ class ApiService extends ChangeNotifier {
     return headers;
   }
 
-  // Autenticar com o Token do CineVS
+  // Autenticar com o Token do CineVS diretamente na API oficial
   Future<List<dynamic>> loginWithToken(String tokenCode) async {
     _isLoading = true;
     _errorMessage = null;
@@ -108,7 +111,7 @@ class ApiService extends ChangeNotifier {
 
     try {
       final response = await http.post(
-        Uri.parse('$_proxyUrl/api/auth/token'),
+        Uri.parse('$_apiBaseUrl/auth/token'),
         headers: _headers,
         body: jsonEncode({
           'access_token': tokenCode,
@@ -133,7 +136,7 @@ class ApiService extends ChangeNotifier {
         notifyListeners();
         return _user?['profiles'] ?? [];
       } else {
-        throw Exception(data['message'] ?? 'Token inválido ou recusado pelo proxy.');
+        throw Exception(data['message'] ?? 'Token inválido ou recusado pelo servidor.');
       }
     } catch (e) {
       _isLoading = false;
@@ -146,9 +149,9 @@ class ApiService extends ChangeNotifier {
   // Carrega itens da página inicial (Recomendações e Destaques)
   Future<Map<String, List<MediaItem>>> fetchFeed() async {
     try {
-      final feedFuture = http.get(Uri.parse('$_proxyUrl/api/feed?page=1'), headers: _headers);
-      final moviesFuture = http.get(Uri.parse('$_proxyUrl/api/catalog/movies?page=1&per_page=12&sort=recent'), headers: _headers);
-      final seriesFuture = http.get(Uri.parse('$_proxyUrl/api/catalog/series?page=1&per_page=12&sort=recent'), headers: _headers);
+      final feedFuture = http.get(Uri.parse('$_apiBaseUrl/feed?page=1'), headers: _headers);
+      final moviesFuture = http.get(Uri.parse('$_apiBaseUrl/catalog/movies?page=1&per_page=12&sort=recent'), headers: _headers);
+      final seriesFuture = http.get(Uri.parse('$_apiBaseUrl/catalog/series?page=1&per_page=12&sort=recent'), headers: _headers);
 
       final results = await Future.wait([feedFuture, moviesFuture, seriesFuture]);
 
@@ -170,7 +173,7 @@ class ApiService extends ChangeNotifier {
         'recent_series': series,
       };
     } catch (e) {
-      print('Erro ao buscar feed do proxy: $e');
+      print('Erro ao buscar feed do CineVS: $e');
       rethrow;
     }
   }
@@ -185,7 +188,7 @@ class ApiService extends ChangeNotifier {
     if (genreId.isNotEmpty) queryParams['genre_id'] = genreId;
     if (year.isNotEmpty) queryParams['year'] = year;
 
-    final uri = Uri.parse('$_proxyUrl/api/catalog/$type').replace(queryParameters: queryParams);
+    final uri = Uri.parse('$_apiBaseUrl/catalog/$type').replace(queryParameters: queryParams);
     
     try {
       final response = await http.get(uri, headers: _headers);
@@ -208,7 +211,7 @@ class ApiService extends ChangeNotifier {
   // Buscar filtros disponíveis (Gêneros e Anos)
   Future<Map<String, dynamic>> fetchFilters() async {
     try {
-      final response = await http.get(Uri.parse('$_proxyUrl/api/catalog/filters'), headers: _headers);
+      final response = await http.get(Uri.parse('$_apiBaseUrl/catalog/filters'), headers: _headers);
       if (response.statusCode == 200) {
         return jsonDecode(response.body);
       }
@@ -222,7 +225,7 @@ class ApiService extends ChangeNotifier {
   // Pesquisar
   Future<List<MediaItem>> search(String query) async {
     try {
-      final response = await http.get(Uri.parse('$_proxyUrl/api/search?q=${Uri.encodeComponent(query)}'), headers: _headers);
+      final response = await http.get(Uri.parse('$_apiBaseUrl/search?q=${Uri.encodeComponent(query)}'), headers: _headers);
       if (response.statusCode == 200) {
         final body = jsonDecode(response.body);
         final List list = body['data'] ?? body ?? [];
@@ -239,7 +242,7 @@ class ApiService extends ChangeNotifier {
   Future<Map<String, dynamic>> fetchMediaDetails(int id, String type) async {
     final route = type == 'movie' ? 'movies' : 'series';
     try {
-      final response = await http.get(Uri.parse('$_proxyUrl/api/$route/$id'), headers: _headers);
+      final response = await http.get(Uri.parse('$_apiBaseUrl/$route/$id'), headers: _headers);
       if (response.statusCode == 200) {
         final details = jsonDecode(response.body);
         
@@ -264,7 +267,7 @@ class ApiService extends ChangeNotifier {
   Future<List<VideoChannel>> fetchEpisodeChannels(int episodeId) async {
     try {
       final response = await http.get(
-        Uri.parse('$_proxyUrl/api/streaming/episodes/$episodeId/videos?platform=web&device_type=web'),
+        Uri.parse('$_apiBaseUrl/streaming/episodes/$episodeId/videos?platform=web&device_type=web'),
         headers: _headers,
       );
       if (response.statusCode == 200) {
@@ -283,7 +286,7 @@ class ApiService extends ChangeNotifier {
   Future<List<VideoChannel>> fetchMovieChannels(int movieId) async {
     try {
       final response = await http.get(
-        Uri.parse('$_proxyUrl/api/streaming/movies/$movieId/videos?platform=web&device_type=web'),
+        Uri.parse('$_apiBaseUrl/streaming/movies/$movieId/videos?platform=web&device_type=web'),
         headers: _headers,
       );
       if (response.statusCode == 200) {
@@ -298,21 +301,51 @@ class ApiService extends ChangeNotifier {
     }
   }
 
-  // Resolve a URL final descriptografada pelo proxy para jogar no player nativo
+  // Resolve a URL final descriptografada diretamente na API do CineVS
   Future<String> resolveStreamUrl(String type, int mediaId, int videoId) async {
     try {
       final profileId = _activeProfile?['id']?.toString() ?? '';
-      final response = await http.get(
-        Uri.parse('$_proxyUrl/api/stream/$type/$mediaId/$videoId?profile_id=$profileId'),
+      final isMovie = (type == 'movie' || type == 'movies');
+      final route = isMovie ? 'movies/$mediaId' : 'episodes/$mediaId';
+      
+      // A. Obter o payload criptografado e o session_id direto do CineVS
+      final videoRes = await http.get(
+        Uri.parse('$_apiBaseUrl/streaming/$route/video/$videoId?device_id=$_deviceId&profile_id=$profileId&device_name=Chrome&device_type=web&platform=web'),
         headers: _headers,
       );
-      if (response.statusCode == 200) {
-        final body = jsonDecode(response.body);
-        if (body['url'] != null) {
-          return body['url'];
-        }
+
+      if (videoRes.statusCode != 200) {
+        throw Exception('Erro ao obter metadados do vídeo do CineVS.');
       }
-      throw Exception('Link de streaming inválido ou bloqueado.');
+
+      final videoData = jsonDecode(videoRes.body);
+      final encryptedPayload = videoData['video_url'];
+      final sessionId = videoData['session_id'];
+
+      if (encryptedPayload == null) {
+        throw Exception('Metadados de streaming inválidos.');
+      }
+
+      // B. Enviar o payload e session_id para decifrar no endpoint resolve-url do CineVS
+      final resolveRes = await http.post(
+        Uri.parse('$_apiBaseUrl/streaming/resolve-url'),
+        headers: _headers,
+        body: jsonEncode({
+          'payload': encryptedPayload,
+          'session_id': sessionId,
+        }),
+      );
+
+      if (resolveRes.statusCode != 200) {
+        throw Exception('Erro ao resolver link final no CineVS.');
+      }
+
+      final resolveData = jsonDecode(resolveRes.body);
+      if (resolveData['url'] != null) {
+        return resolveData['url'];
+      }
+      
+      throw Exception('Link final de streaming vazio.');
     } catch (e) {
       print('Erro ao resolver streaming: $e');
       rethrow;
